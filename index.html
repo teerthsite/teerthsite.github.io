@@ -1,46 +1,58 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>My 3D Game</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-  </style>
-</head>
-<body>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+const scene = new THREE.Scene();
 
-  <script>
-    const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
 
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+// Player (cube)
+const geometry = new THREE.BoxGeometry();
+const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+const player = new THREE.Mesh(geometry, material);
+scene.add(player);
 
-    // cube
-    const geometry = new THREE.BoxGeometry();
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+camera.position.z = 5;
 
-    camera.position.z = 5;
+// controls
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-    function animate() {
-      requestAnimationFrame(animate);
+// ground
+const groundGeo = new THREE.PlaneGeometry(20, 20);
+const groundMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = Math.PI / 2;
+ground.position.y = -1;
+scene.add(ground);
 
-      cube.rotation.x += 0.01;
-      cube.rotation.y += 0.01;
+function update() {
+  const speed = 0.1;
 
-      renderer.render(scene, camera);
-    }
+  if (keys["w"]) player.position.z -= speed;
+  if (keys["s"]) player.position.z += speed;
+  if (keys["a"]) player.position.x -= speed;
+  if (keys["d"]) player.position.x += speed;
 
-    animate();
-  </script>
-</body>
-</html>
+  // camera follows player
+  camera.position.x = player.position.x;
+  camera.position.z = player.position.z + 5;
+  camera.lookAt(player.position);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  update();
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
