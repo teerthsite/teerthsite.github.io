@@ -1,137 +1,235 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Simulation Escape</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: black; }
-    #ui {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-family: sans-serif;
-      font-size: 18px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>GTA Style Prototype</title>
+<style>
+body { margin:0; overflow:hidden; background:#111; }
+canvas { display:block; background:#000; }
+</style>
 </head>
 <body>
 
-<div id="ui">Fragments: 0 / 5</div>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<canvas id="c" width="800" height="400"></canvas>
 
 <script>
-const scene = new THREE.Scene();
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
 
-// camera
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
-
-// renderer
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// player
-const playerGeo = new THREE.BoxGeometry();
-const playerMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-const player = new THREE.Mesh(playerGeo, playerMat);
-scene.add(player);
-
-// movement
 let keys = {};
+
+// ===================== INPUT =====================
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// camera position
-camera.position.z = 5;
+// ===================== WORLD =====================
+let walls = [
+    {x:200,y:100,w:200,h:20},
+    {x:-200,y:-100,w:20,h:200}
+];
 
-// ground
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(50, 50),
-  new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide })
-);
-ground.rotation.x = Math.PI / 2;
-scene.add(ground);
+// ===================== PLAYER =====================
+let player = {
+    x:0,y:0,size:20
+};
 
-// STORY OBJECTS (data cores)
-let goals = [];
-let collected = 0;
+// ===================== CAMERA =====================
+let camera = {x:0,y:0};
 
-function createGoal(x, z) {
-  const geo = new THREE.BoxGeometry();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-  const cube = new THREE.Mesh(geo, mat);
+// ===================== STUN =====================
+let stunned = false;
+let stunTime = 0;
 
-  cube.position.set(x, 0, z);
-  scene.add(cube);
+// ===================== CAR =====================
+let car = {
+    x:100,y:100,
+    angle:0,
+    vx:0,vy:0,
+    grip:0.92
+};
 
-  goals.push(cube);
+let inCar = true;
+
+// ===================== BIKE =====================
+let bike = {
+    x:-150,y:0,
+    angle:0,
+    speed:0,
+    balance:0
+};
+
+let usingBike = false;
+
+// ===================== POLICE =====================
+let police = {
+    x:300,y:300,
+    speed:1.5
+};
+
+let wanted = 0;
+
+// ===================== SHAKE =====================
+let shake = 0;
+
+// ===================== UPDATE =====================
+function update(){
+
+// ===================== STUN =====================
+if(stunned){
+    stunTime--;
+    if(stunTime <= 0) stunned = false;
+    return;
 }
 
-// spawn 5 fragments
-for (let i = 0; i < 5; i++) {
-  createGoal(
-    (Math.random() - 0.5) * 20,
-    (Math.random() - 0.5) * 20
-  );
-}
+// ===================== SWITCH VEHICLE =====================
+if(keys["1"]) { inCar = true; usingBike = false; }
+if(keys["2"]) { inCar = false; usingBike = true; }
 
-// UI
-const ui = document.getElementById("ui");
+// ===================== CAR DRIFT =====================
+if(inCar){
 
-// collision
-function isNear(a, b) {
-  return a.position.distanceTo(b.position) < 1;
-}
-
-// update loop
-function update() {
-  const speed = 0.15;
-
-  if (keys["w"]) player.position.z -= speed;
-  if (keys["s"]) player.position.z += speed;
-  if (keys["a"]) player.position.x -= speed;
-  if (keys["d"]) player.position.x += speed;
-
-  // camera follow
-  camera.position.x = player.position.x;
-  camera.position.z = player.position.z + 5;
-  camera.lookAt(player.position);
-
-  // collect fragments
-  for (let i = 0; i < goals.length; i++) {
-    if (isNear(player, goals[i])) {
-
-      scene.remove(goals[i]);
-      goals.splice(i, 1);
-
-      collected++;
-      ui.innerText = `Fragments: ${collected} / 5`;
-
-      if (collected === 5) {
-        setTimeout(() => {
-          alert("Simulation stabilized. You escaped.");
-        }, 100);
-      }
-
-      break;
+    if(keys["w"]){
+        car.vx += Math.cos(car.angle)*0.2;
+        car.vy += Math.sin(car.angle)*0.2;
     }
-  }
+
+    if(keys["a"]) car.angle -= 3;
+    if(keys["d"]) car.angle += 3;
+
+    let fX = Math.cos(car.angle);
+    let fY = Math.sin(car.angle);
+
+    let dot = car.vx*fX + car.vy*fY;
+
+    car.vx = car.vx*car.grip + fX*dot*(1-car.grip);
+    car.vy = car.vy*car.grip + fY*dot*(1-car.grip);
+
+    car.x += car.vx;
+    car.y += car.vy;
+
+    player.x = car.x;
+    player.y = car.y;
+
+    if(Math.hypot(car.vx,car.vy) > 6 && Math.random()<0.01){
+        stun(80);
+    }
 }
 
-// render loop
-function animate() {
-  requestAnimationFrame(animate);
-  update();
-  renderer.render(scene, camera);
+// ===================== BIKE =====================
+if(usingBike){
+
+    if(keys["w"]) bike.speed += 0.2;
+    if(keys["s"]) bike.speed *= 0.95;
+
+    if(keys["a"]) bike.angle -= 3;
+    if(keys["d"]) bike.angle += 3;
+
+    bike.x += Math.cos(bike.angle)*bike.speed;
+    bike.y += Math.sin(bike.angle)*bike.speed;
+
+    bike.balance += (Math.random()-0.5)*0.1;
+    bike.balance *= 0.9;
+
+    if(Math.abs(bike.balance) > 1.5){
+        stun(120);
+    }
+
+    player.x = bike.x;
+    player.y = bike.y;
 }
 
-animate();
+// ===================== POLICE CHASE =====================
+if(wanted > 0){
+
+    let dx = player.x - police.x;
+    let dy = player.y - police.y;
+    let d = Math.hypot(dx,dy);
+
+    police.x += dx/d * police.speed;
+    police.y += dy/d * police.speed;
+
+    if(d < 20){
+        stun(100);
+    }
+}
+
+// ===================== CAMERA =====================
+camera.x += (player.x - camera.x) * 0.08;
+camera.y += (player.y - camera.y) * 0.08;
+
+// shake
+if(shake > 0){
+    camera.x += (Math.random()-0.5)*shake;
+    camera.y += (Math.random()-0.5)*shake;
+    shake *= 0.9;
+}
+
+// ===================== WANTED =====================
+if(keys[" "]) wanted = Math.min(5, wanted+1);
+
+}
+
+// ===================== STUN FUNCTION =====================
+function stun(t){
+    stunned = true;
+    stunTime = t;
+    shake = 10;
+}
+
+// ===================== DRAW =====================
+function draw(){
+ctx.clearRect(0,0,800,400);
+
+// camera transform
+ctx.save();
+ctx.translate(400 - camera.x, 200 - camera.y);
+
+// ===================== WALLS =====================
+ctx.fillStyle="gray";
+for(let w of walls){
+    ctx.fillRect(w.x,w.y,w.w,w.h);
+}
+
+// ===================== CAR =====================
+ctx.fillStyle="cyan";
+ctx.save();
+ctx.translate(car.x,car.y);
+ctx.rotate(car.angle);
+ctx.fillRect(-10,-10,20,20);
+ctx.restore();
+
+// ===================== BIKE =====================
+ctx.fillStyle="orange";
+ctx.save();
+ctx.translate(bike.x,bike.y);
+ctx.rotate(bike.angle + bike.balance*0.3);
+ctx.fillRect(-8,-8,16,16);
+ctx.restore();
+
+// ===================== PLAYER =====================
+ctx.fillStyle="white";
+ctx.fillRect(player.x-5,player.y-5,10,10);
+
+// ===================== POLICE =====================
+ctx.fillStyle="red";
+ctx.fillRect(police.x-10,police.y-10,20,20);
+
+// ===================== HUD =====================
+ctx.fillStyle="yellow";
+for(let i=0;i<wanted;i++){
+    ctx.fillText("⭐",10+i*15,20);
+}
+
+ctx.restore();
+}
+
+// ===================== LOOP =====================
+function loop(){
+update();
+draw();
+requestAnimationFrame(loop);
+}
+loop();
 </script>
 
 </body>
