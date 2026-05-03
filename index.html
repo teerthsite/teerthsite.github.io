@@ -2,232 +2,243 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>GTA Style Prototype</title>
+<title>GTA Style Sandbox Demo</title>
 <style>
-body { margin:0; overflow:hidden; background:#111; }
-canvas { display:block; background:#000; }
+body { margin:0; overflow:hidden; background:#000; }
+canvas { display:block; }
+#ui {
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-family:Arial;
+    font-size:14px;
+}
 </style>
 </head>
 <body>
 
-<canvas id="c" width="800" height="400"></canvas>
+<canvas id="game"></canvas>
+<div id="ui"></div>
 
 <script>
-const canvas = document.getElementById("c");
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// 🌍 WORLD
+let world = { shake:0 };
+
+// 🎮 INPUT
 let keys = {};
+document.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
-// ===================== INPUT =====================
-document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+// 🧍 PLAYER
+let player = { x:0, y:0, vx:0, vy:0 };
 
-// ===================== WORLD =====================
-let walls = [
-    {x:200,y:100,w:200,h:20},
-    {x:-200,y:-100,w:20,h:200}
-];
+// 🚗 CAR
+let car = { x:120, y:0, vx:0, vy:0, angle:0, inCar:false };
 
-// ===================== PLAYER =====================
-let player = {
-    x:0,y:0,size:20
-};
+// 👮 POLICE
+let police = { x:400, y:400 };
 
-// ===================== CAMERA =====================
-let camera = {x:0,y:0};
-
-// ===================== STUN =====================
-let stunned = false;
-let stunTime = 0;
-
-// ===================== CAR =====================
-let car = {
-    x:100,y:100,
-    angle:0,
-    vx:0,vy:0,
-    grip:0.92
-};
-
-let inCar = true;
-
-// ===================== BIKE =====================
-let bike = {
-    x:-150,y:0,
-    angle:0,
-    speed:0,
-    balance:0
-};
-
-let usingBike = false;
-
-// ===================== POLICE =====================
-let police = {
-    x:300,y:300,
-    speed:1.5
-};
-
+// ⭐ WANTED
 let wanted = 0;
 
-// ===================== SHAKE =====================
-let shake = 0;
+// 🎯 MISSION
+let mission = { x:300, y:300, active:true };
 
-// ===================== UPDATE =====================
-function update(){
+// 🧍 PLAYER MOVEMENT
+function updatePlayer(){
+    if(car.inCar) return;
 
-// ===================== STUN =====================
-if(stunned){
-    stunTime--;
-    if(stunTime <= 0) stunned = false;
-    return;
+    let a = 0.08;
+
+    if(keys["w"]) player.y -= a * 10;
+    if(keys["s"]) player.y += a * 10;
+    if(keys["a"]) player.x -= a * 10;
+    if(keys["d"]) player.x += a * 10;
+
+    player.vx *= 0.85;
+    player.vy *= 0.85;
+
+    player.x += player.vx;
+    player.y += player.vy;
 }
 
-// ===================== SWITCH VEHICLE =====================
-if(keys["1"]) { inCar = true; usingBike = false; }
-if(keys["2"]) { inCar = false; usingBike = true; }
+// 🚗 CAR PHYSICS (GTA FEEL)
+function updateCar(){
 
-// ===================== CAR DRIFT =====================
-if(inCar){
+    if(!car.inCar) return;
+
+    let fx = Math.cos(car.angle);
+    let fy = Math.sin(car.angle);
 
     if(keys["w"]){
-        car.vx += Math.cos(car.angle)*0.2;
-        car.vy += Math.sin(car.angle)*0.2;
+        car.vx += fx * 0.12;
+        car.vy += fy * 0.12;
     }
 
-    if(keys["a"]) car.angle -= 3;
-    if(keys["d"]) car.angle += 3;
+    let speed = Math.hypot(car.vx,car.vy);
+    let turn = 0.02 + speed * 0.002;
 
-    let fX = Math.cos(car.angle);
-    let fY = Math.sin(car.angle);
+    if(keys["a"]) car.angle -= turn;
+    if(keys["d"]) car.angle += turn;
 
-    let dot = car.vx*fX + car.vy*fY;
+    let grip = keys["shift"] ? 0.98 : 0.92;
 
-    car.vx = car.vx*car.grip + fX*dot*(1-car.grip);
-    car.vy = car.vy*car.grip + fY*dot*(1-car.grip);
+    car.vx *= grip;
+    car.vy *= grip;
 
     car.x += car.vx;
     car.y += car.vy;
 
+    if(speed > 5){
+        world.shake = speed * 0.4;
+    }
+
     player.x = car.x;
     player.y = car.y;
+}
 
-    if(Math.hypot(car.vx,car.vy) > 6 && Math.random()<0.01){
-        stun(80);
+// 👮 POLICE AI
+function updatePolice(){
+
+    let target = car.inCar ? car : player;
+
+    let dx = target.x - police.x;
+    let dy = target.y - police.y;
+
+    let dist = Math.hypot(dx,dy);
+
+    police.x += dx/dist * 0.05 * Math.max(1,wanted);
+    police.y += dy/dist * 0.05 * Math.max(1,wanted);
+
+    if(dist < 30){
+        world.shake = 8;
     }
 }
 
-// ===================== BIKE =====================
-if(usingBike){
+// ⭐ WANTED SYSTEM
+function updateWanted(){
 
-    if(keys["w"]) bike.speed += 0.2;
-    if(keys["s"]) bike.speed *= 0.95;
+    if(keys[" "]) wanted = Math.min(5, wanted + 0.05);
 
-    if(keys["a"]) bike.angle -= 3;
-    if(keys["d"]) bike.angle += 3;
-
-    bike.x += Math.cos(bike.angle)*bike.speed;
-    bike.y += Math.sin(bike.angle)*bike.speed;
-
-    bike.balance += (Math.random()-0.5)*0.1;
-    bike.balance *= 0.9;
-
-    if(Math.abs(bike.balance) > 1.5){
-        stun(120);
-    }
-
-    player.x = bike.x;
-    player.y = bike.y;
-}
-
-// ===================== POLICE CHASE =====================
-if(wanted > 0){
-
-    let dx = player.x - police.x;
-    let dy = player.y - police.y;
-    let d = Math.hypot(dx,dy);
-
-    police.x += dx/d * police.speed;
-    police.y += dy/d * police.speed;
-
-    if(d < 20){
-        stun(100);
+    if(wanted > 0){
+        wanted *= 0.999;
     }
 }
 
-// ===================== CAMERA =====================
-camera.x += (player.x - camera.x) * 0.08;
-camera.y += (player.y - camera.y) * 0.08;
+// 🎯 MISSION
+function updateMission(){
 
-// shake
-if(shake > 0){
-    camera.x += (Math.random()-0.5)*shake;
-    camera.y += (Math.random()-0.5)*shake;
-    shake *= 0.9;
+    let dx = player.x - mission.x;
+    let dy = player.y - mission.y;
+
+    let dist = Math.hypot(dx,dy);
+
+    if(dist < 20 && mission.active){
+        mission.active = false;
+        wanted = 0;
+    }
 }
 
-// ===================== WANTED =====================
-if(keys[" "]) wanted = Math.min(5, wanted+1);
-
-}
-
-// ===================== STUN FUNCTION =====================
-function stun(t){
-    stunned = true;
-    stunTime = t;
-    shake = 10;
-}
-
-// ===================== DRAW =====================
+// 🎮 DRAW WORLD
 function draw(){
-ctx.clearRect(0,0,800,400);
 
-// camera transform
-ctx.save();
-ctx.translate(400 - camera.x, 200 - camera.y);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// ===================== WALLS =====================
-ctx.fillStyle="gray";
-for(let w of walls){
-    ctx.fillRect(w.x,w.y,w.w,w.h);
+    let shakeX = (Math.random()-0.5)*world.shake;
+    let shakeY = (Math.random()-0.5)*world.shake;
+
+    world.shake *= 0.9;
+
+    ctx.save();
+    ctx.translate(canvas.width/2 - player.x + shakeX,
+                  canvas.height/2 - player.y + shakeY);
+
+    // 🌍 ground
+    ctx.fillStyle = "#2d8f2d";
+    ctx.fillRect(-2000,-2000,4000,4000);
+
+    // 🧍 player
+    ctx.fillStyle = "cyan";
+    ctx.fillRect(player.x-10,player.y-10,20,20);
+
+    // 🚗 car
+    ctx.fillStyle = "blue";
+    ctx.save();
+    ctx.translate(car.x,car.y);
+    ctx.rotate(car.angle);
+    ctx.fillRect(-15,-10,30,20);
+    ctx.restore();
+
+    // 👮 police
+    ctx.fillStyle = "red";
+    ctx.fillRect(police.x-10,police.y-10,20,20);
+
+    // 🎯 mission
+    if(mission.active){
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(mission.x,mission.y,10,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+
+    drawMinimap();
+    drawUI();
 }
 
-// ===================== CAR =====================
-ctx.fillStyle="cyan";
-ctx.save();
-ctx.translate(car.x,car.y);
-ctx.rotate(car.angle);
-ctx.fillRect(-10,-10,20,20);
-ctx.restore();
+// 🗺️ MINIMAP
+function drawMinimap(){
 
-// ===================== BIKE =====================
-ctx.fillStyle="orange";
-ctx.save();
-ctx.translate(bike.x,bike.y);
-ctx.rotate(bike.angle + bike.balance*0.3);
-ctx.fillRect(-8,-8,16,16);
-ctx.restore();
+    let size = 140;
 
-// ===================== PLAYER =====================
-ctx.fillStyle="white";
-ctx.fillRect(player.x-5,player.y-5,10,10);
+    ctx.fillStyle = "black";
+    ctx.fillRect(10,10,size,size);
 
-// ===================== POLICE =====================
-ctx.fillStyle="red";
-ctx.fillRect(police.x-10,police.y-10,20,20);
+    ctx.fillStyle = "white";
+    ctx.fillRect(10+size/2,10+size/2,4,4);
 
-// ===================== HUD =====================
-ctx.fillStyle="yellow";
-for(let i=0;i<wanted;i++){
-    ctx.fillText("⭐",10+i*15,20);
+    ctx.fillStyle = "red";
+    ctx.fillRect(10+police.x*0.05,10+police.y*0.05,4,4);
+
+    if(mission.active){
+        ctx.fillStyle = "yellow";
+        ctx.fillRect(10+mission.x*0.05,10+mission.y*0.05,4,4);
+    }
 }
 
-ctx.restore();
+// 🎮 UI
+function drawUI(){
+    document.getElementById("ui").innerHTML =
+        "Wanted: " + Math.floor(wanted) + " ⭐<br>" +
+        "E = Enter/Exit Car | SHIFT = Drift | SPACE = Increase Wanted";
 }
 
-// ===================== LOOP =====================
+// 🚗 ENTER / EXIT CAR
+document.addEventListener("keydown",e=>{
+    if(e.key==="e"){
+        car.inCar = !car.inCar;
+        player.x = car.x;
+        player.y = car.y;
+    }
+});
+
+// 🔁 LOOP
 function loop(){
-update();
-draw();
-requestAnimationFrame(loop);
+    updatePlayer();
+    updateCar();
+    updatePolice();
+    updateWanted();
+    updateMission();
+    draw();
+    requestAnimationFrame(loop);
 }
 loop();
 </script>
