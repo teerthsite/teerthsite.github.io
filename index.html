@@ -1,6 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simulation Escape</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; }
+    #ui {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-family: sans-serif;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="ui">Fragments: 0 / 5</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
 <script>
 const scene = new THREE.Scene();
 
+// camera
 const camera = new THREE.PerspectiveCamera(
   75,
   window.innerWidth / window.innerHeight,
@@ -8,51 +31,108 @@ const camera = new THREE.PerspectiveCamera(
   1000
 );
 
+// renderer
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Player (cube)
-const geometry = new THREE.BoxGeometry();
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-const player = new THREE.Mesh(geometry, material);
+// player
+const playerGeo = new THREE.BoxGeometry();
+const playerMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+const player = new THREE.Mesh(playerGeo, playerMat);
 scene.add(player);
 
-camera.position.z = 5;
-
-// controls
+// movement
 let keys = {};
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
+// camera position
+camera.position.z = 5;
+
 // ground
-const groundGeo = new THREE.PlaneGeometry(20, 20);
-const groundMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide });
-const ground = new THREE.Mesh(groundGeo, groundMat);
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(50, 50),
+  new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide })
+);
 ground.rotation.x = Math.PI / 2;
-ground.position.y = -1;
 scene.add(ground);
 
+// STORY OBJECTS (data cores)
+let goals = [];
+let collected = 0;
+
+function createGoal(x, z) {
+  const geo = new THREE.BoxGeometry();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+  const cube = new THREE.Mesh(geo, mat);
+
+  cube.position.set(x, 0, z);
+  scene.add(cube);
+
+  goals.push(cube);
+}
+
+// spawn 5 fragments
+for (let i = 0; i < 5; i++) {
+  createGoal(
+    (Math.random() - 0.5) * 20,
+    (Math.random() - 0.5) * 20
+  );
+}
+
+// UI
+const ui = document.getElementById("ui");
+
+// collision
+function isNear(a, b) {
+  return a.position.distanceTo(b.position) < 1;
+}
+
+// update loop
 function update() {
-  const speed = 0.1;
+  const speed = 0.15;
 
   if (keys["w"]) player.position.z -= speed;
   if (keys["s"]) player.position.z += speed;
   if (keys["a"]) player.position.x -= speed;
   if (keys["d"]) player.position.x += speed;
 
-  // camera follows player
+  // camera follow
   camera.position.x = player.position.x;
   camera.position.z = player.position.z + 5;
   camera.lookAt(player.position);
+
+  // collect fragments
+  for (let i = 0; i < goals.length; i++) {
+    if (isNear(player, goals[i])) {
+
+      scene.remove(goals[i]);
+      goals.splice(i, 1);
+
+      collected++;
+      ui.innerText = `Fragments: ${collected} / 5`;
+
+      if (collected === 5) {
+        setTimeout(() => {
+          alert("Simulation stabilized. You escaped.");
+        }, 100);
+      }
+
+      break;
+    }
+  }
 }
 
+// render loop
 function animate() {
   requestAnimationFrame(animate);
-
   update();
   renderer.render(scene, camera);
 }
 
 animate();
 </script>
+
+</body>
+</html>
