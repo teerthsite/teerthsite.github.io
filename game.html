@@ -1,411 +1,97 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>GTA Web V2.3 Stable</title>
-
-<style>
-body { margin:0; overflow:hidden; font-family:Arial; }
-
-#ui{
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:white;
-    z-index:10;
-    font-size:14px;
-}
-
-#map{
-    position:absolute;
-    bottom:10px;
-    right:10px;
-    width:170px;
-    height:170px;
-    border:2px solid white;
-    background:rgba(0,0,0,0.6);
-    z-index:10;
-}
-
-#menu{
-    position:absolute;
-    width:100%;
-    height:100%;
-    background:black;
-    color:white;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    z-index:20;
-}
-
-button{ padding:10px 20px; font-size:18px; }
-</style>
-</head>
-
-<body>
-
-<div id="menu">
-    <h1>GTA Web V2.3</h1>
-    <button onclick="startGame()">Play</button>
-</div>
-
-<div id="ui"></div>
-<canvas id="map"></canvas>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-
-<script>
-
-// =====================
-// MAP
-// =====================
-const map = document.getElementById("map");
-const ctx = map.getContext("2d");
-
-// =====================
-// STATE
-// =====================
-let gameState = "menu";
-
-let health = 100;
-let money = 0;
-let wanted = 0;
-
-let keys = {};
-let bullets = [];
-let police = [];
-
-let shootFlag = false;
-let policeTimer = 0;
-
-// =====================
-// WORLD
-// =====================
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-camera.position.set(0,10,10);
-
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth, innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// LIGHT
-scene.add(new THREE.AmbientLight(0x666666));
-const sun = new THREE.DirectionalLight(0xffffff,1);
-sun.position.set(10,20,10);
-scene.add(sun);
-
-// =====================
-// GROUND
-// =====================
-const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(1000,1000),
-    new THREE.MeshStandardMaterial({color:0x2d7a2d})
-);
-ground.rotation.x = -Math.PI/2;
-scene.add(ground);
-
-// =====================
-// PLAYER
-// =====================
-const player = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.5,1,4,8),
-    new THREE.MeshStandardMaterial({color:0x00ffff})
-);
-player.position.y = 1;
-scene.add(player);
-
-// =====================
-// CARS
-// =====================
-let cars = [];
-let currentCar = null;
-
-function spawnCar(x,z){
-    const car = new THREE.Mesh(
-        new THREE.BoxGeometry(2,1,4),
-        new THREE.MeshStandardMaterial({color:0xff0000})
-    );
-    car.position.set(x,0.5,z);
-    car.speed = 0;
-    car.rot = 0;
-    scene.add(car);
-    cars.push(car);
-}
-
-for(let i=0;i<5;i++){
-    spawnCar(Math.random()*60-30, Math.random()*60-30);
-}
-
-// =====================
-// INPUT
-// =====================
-window.addEventListener("keydown", e => keys[e.code] = true);
-window.addEventListener("keyup", e => keys[e.code] = false);
-
-// =====================
-// START
-// =====================
-function startGame(){
-    document.getElementById("menu").style.display = "none";
-    gameState = "play";
-}
-
-// =====================
-// ENTER / EXIT CAR
-// =====================
-window.addEventListener("keydown", e=>{
-    if(e.key.toLowerCase() === "f"){
-
-        if(currentCar){
-            currentCar = null;
-        } else {
-            for(let c of cars){
-                if(player.position.distanceTo(c.position) < 3){
-                    currentCar = c;
-                    break;
-                }
-            }
-        }
-    }
-});
-
-// =====================
-// SHOOT
-// =====================
-window.addEventListener("click", ()=>{
-
-    if(gameState !== "play") return;
-
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-
-    bullets.push({
-        x: player.position.x,
-        z: player.position.z,
-        dx: dir.x,
-        dz: dir.z,
-        life: 1
-    });
-
-    shootFlag = true;
-    wanted = Math.min(5, wanted + 0.5);
-});
-
-// =====================
-// PLAYER + CAR (FINAL FIXED PHYSICS)
-// =====================
-function updatePlayer(dt){
-
-    const walk = 4;
-    const accel = 6;
-
-    if(currentCar){
-
-        if(keys["KeyW"]) currentCar.speed += accel * dt;
-        if(keys["KeyS"]) currentCar.speed -= accel * dt;
-        if(keys["KeyA"]) currentCar.rot += 2.5 * dt;
-        if(keys["KeyD"]) currentCar.rot -= 2.5 * dt;
-
-        // FIXED FPS-INDEPENDENT FRICTION
-        currentCar.speed *= Math.pow(0.92, dt * 60);
-
-        currentCar.position.x += Math.sin(currentCar.rot) * currentCar.speed * dt;
-        currentCar.position.z += Math.cos(currentCar.rot) * currentCar.speed * dt;
-
-        player.position.x = currentCar.position.x + Math.sin(currentCar.rot) * 0.6;
-        player.position.z = currentCar.position.z + Math.cos(currentCar.rot) * 0.6;
-        player.position.y = 1;
-
-    } else {
-
-        if(keys["KeyW"]) player.position.z -= walk * dt;
-        if(keys["KeyS"]) player.position.z += walk * dt;
-        if(keys["KeyA"]) player.position.x -= walk * dt;
-        if(keys["KeyD"]) player.position.x += walk * dt;
-    }
-}
-
-// =====================
-// BULLETS (CLEAN TIME SYSTEM)
-// =====================
-function updateBullets(dt){
-
-    const speed = 15;
-
-    for(let i = bullets.length - 1; i >= 0; i--){
-
-        let b = bullets[i];
-
-        b.x += b.dx * speed * dt;
-        b.z += b.dz * speed * dt;
-        b.life -= dt;
-
-        for(let j = police.length - 1; j >= 0; j--){
-
-            let p = police[j];
-
-            let dx = b.x - p.position.x;
-            let dz = b.z - p.position.z;
-
-            if(Math.sqrt(dx*dx + dz*dz) < 1.2){
-
-                scene.remove(p);
-                police.splice(j,1);
-                money += 20;
-                b.life = 0;
-                break;
-            }
-        }
-    }
-
-    bullets = bullets.filter(b => b.life > 0);
-}
-
-// =====================
-// POLICE (STABLE SCALING)
-// =====================
-function spawnPolice(){
-
-    const p = new THREE.Mesh(
-        new THREE.BoxGeometry(1,2,1),
-        new THREE.MeshStandardMaterial({color:0x0000ff})
-    );
-
-    p.position.set(player.position.x+10,1,player.position.z+10);
-    scene.add(p);
-    police.push(p);
-}
-
-function updatePolice(dt){
-
-    let pressure = shootFlag ? 1.2 : -0.7;
-    wanted = Math.max(0, Math.min(5, wanted + pressure * dt));
-
-    shootFlag = false;
-
-    policeTimer += dt;
-
-    let spawnDelay = 2.8 - wanted * 0.35;
-    spawnDelay = Math.max(0.8, spawnDelay);
-
-    if(wanted > 1 && policeTimer > spawnDelay){
-        spawnPolice();
-        policeTimer = 0;
-    }
-
-    if(wanted < 0.1){
-        police.forEach(p => scene.remove(p));
-        police = [];
-    }
-
-    for(let p of police){
-
-        let dx = player.position.x - p.position.x;
-        let dz = player.position.z - p.position.z;
-
-        let dist = Math.sqrt(dx*dx + dz*dz);
-
-        if(dist > 1){
-            p.position.x += (dx/dist) * 3 * dt;
-            p.position.z += (dz/dist) * 3 * dt;
-        }
-
-        // SAFE HEALTH SYSTEM
-        if(dist < 2){
-            health = Math.max(0, health - (6 / dist) * dt);
-        }
-    }
-}
-
-// =====================
-// CAMERA
-// =====================
-function updateCamera(){
-
-    camera.position.x += (player.position.x - camera.position.x) * 0.12;
-    camera.position.y += (10 - camera.position.y) * 0.12;
-    camera.position.z += (player.position.z + 10 - camera.position.z) * 0.12;
-
-    camera.lookAt(player.position);
-}
-
-// =====================
-// MINIMAP
-// =====================
-function drawMap(){
-
-    ctx.clearRect(0,0,170,170);
-
-    const scale = 0.3;
-
-    ctx.fillStyle = "cyan";
-    ctx.fillRect(85,85,4,4);
-
-    ctx.fillStyle = "blue";
-    police.forEach(p=>{
-        ctx.fillRect(
-            85 + (p.position.x - player.position.x)*scale,
-            85 + (p.position.z - player.position.z)*scale,
-            2,2
-        );
-    });
-}
-
-// =====================
-// UI
-// =====================
-function drawUI(){
-
-    if(health <= 0){
-        gameState = "dead";
-    }
-
-    if(gameState === "dead"){
-        document.getElementById("ui").innerHTML = "💀 WASTED - Refresh";
-        return;
-    }
-
-    document.getElementById("ui").innerHTML =
-    `❤️ ${Math.floor(health)}<br>
-     💰 ${money}<br>
-     ⭐ ${wanted.toFixed(1)}<br>
-     🚗 ${currentCar ? "Driving" : "Walking"}`;
-}
-
-// =====================
-// LOOP
-// =====================
-let last = performance.now();
+let clock = new THREE.Clock();
+
+let ready = {
+    player: false,
+    car: false
+};
 
 function animate(){
 
     requestAnimationFrame(animate);
 
-    let now = performance.now();
-    let dt = Math.min((now - last)/1000, 0.033);
-    last = now;
+    let dt = Math.min(clock.getDelta(), 0.033);
 
-    if(gameState === "play"){
-        updatePlayer(dt);
-        updateBullets(dt);
-        updatePolice(dt);
+    if(!player || !car) {
+        renderer.render(scene,camera);
+        return;
     }
 
-    updateCamera();
-    drawMap();
-    drawUI();
+    // =====================
+    // WALK MODE
+    // =====================
+    if(!inCar){
+
+        let speed = 4 * dt;
+
+        if(keys["w"]) player.position.z -= speed;
+        if(keys["s"]) player.position.z += speed;
+        if(keys["a"]) player.position.x -= speed;
+        if(keys["d"]) player.position.x += speed;
+    }
+
+    // =====================
+    // CAR MODE (FIXED PHYSICS FEEL)
+    // =====================
+    if(inCar){
+
+        let accel = 6 * dt;
+        let turn = 2.5 * dt;
+
+        if(keys["w"]) car.userData.speed = (car.userData.speed || 0) + accel;
+        if(keys["s"]) car.userData.speed = (car.userData.speed || 0) - accel;
+
+        if(keys["a"]) car.rotation.y += turn;
+        if(keys["d"]) car.rotation.y -= turn;
+
+        // friction
+        car.userData.speed *= Math.pow(0.92, dt * 60);
+
+        car.position.x += Math.sin(car.rotation.y) * car.userData.speed;
+        car.position.z += Math.cos(car.rotation.y) * car.userData.speed;
+
+        // player sticks to car (clean seat system)
+        player.position.set(
+            car.position.x,
+            car.position.y + 1,
+            car.position.z
+        );
+    }
+
+    // =====================
+    // ENTER / EXIT FIXED
+    // =====================
+    if(keys["e"] && !eLast){
+
+        if(!inCar && car && player.position.distanceTo(car.position) < 3){
+            inCar = true;
+        }
+        else if(inCar){
+            inCar = false;
+
+            player.position.x += Math.sin(car.rotation.y) * 2;
+            player.position.z += Math.cos(car.rotation.y) * 2;
+        }
+    }
+
+    eLast = keys["e"];
+
+    // =====================
+    // CAMERA (FIXED GTA STYLE FOLLOW)
+    // =====================
+    let target = inCar ? car.position : player.position;
+
+    let desired = new THREE.Vector3(
+        target.x,
+        5,
+        target.z + 8
+    );
+
+    cam.lerp(desired, 0.1);
+
+    camera.position.copy(cam);
+    camera.lookAt(target);
 
     renderer.render(scene,camera);
 }
 
 animate();
-
-</script>
-
-</body>
-</html>
