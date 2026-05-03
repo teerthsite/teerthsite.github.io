@@ -1,9 +1,7 @@
 let clock = new THREE.Clock();
 
-let ready = {
-    player: false,
-    car: false
-};
+let carSpeed = 0;
+let cam = new THREE.Vector3();
 
 function animate(){
 
@@ -11,7 +9,7 @@ function animate(){
 
     let dt = Math.min(clock.getDelta(), 0.033);
 
-    if(!player || !car) {
+    if(!player || !car){
         renderer.render(scene,camera);
         return;
     }
@@ -30,35 +28,51 @@ function animate(){
     }
 
     // =====================
-    // CAR MODE (FIXED PHYSICS FEEL)
+    // CAR MODE (IMPROVED GTA FEEL)
     // =====================
     if(inCar){
 
         let accel = 6 * dt;
-        let turn = 2.5 * dt;
+        let turn = 2.8 * dt;
 
-        if(keys["w"]) car.userData.speed = (car.userData.speed || 0) + accel;
-        if(keys["s"]) car.userData.speed = (car.userData.speed || 0) - accel;
+        // acceleration / braking
+        if(keys["w"]) carSpeed += accel;
+        if(keys["s"]) carSpeed -= accel;
 
-        if(keys["a"]) car.rotation.y += turn;
-        if(keys["d"]) car.rotation.y -= turn;
+        // natural friction (VERY IMPORTANT FOR GTA FEEL)
+        if(!keys["w"] && !keys["s"]){
+            carSpeed *= Math.pow(0.90, dt * 60);
+        }
 
-        // friction
-        car.userData.speed *= Math.pow(0.92, dt * 60);
+        // clamp speed (prevents breaking physics)
+        carSpeed = Math.max(-6, Math.min(12, carSpeed));
 
-        car.position.x += Math.sin(car.rotation.y) * car.userData.speed;
-        car.position.z += Math.cos(car.rotation.y) * car.userData.speed;
+        // steering depends on speed (GTA-style feel)
+        let steerFactor = Math.min(1, Math.abs(carSpeed) / 5);
 
-        // player sticks to car (clean seat system)
-        player.position.set(
-            car.position.x,
-            car.position.y + 1,
-            car.position.z
+        if(keys["a"]) car.rotation.y += turn * steerFactor;
+        if(keys["d"]) car.rotation.y -= turn * steerFactor;
+
+        // movement vector (FIXED physics style)
+        let forward = new THREE.Vector3(
+            Math.sin(car.rotation.y),
+            0,
+            Math.cos(car.rotation.y)
+        );
+
+        car.position.add(forward.multiplyScalar(carSpeed * dt));
+
+        // smoother player follow (NOT snapping)
+        let seatOffset = forward.clone().multiplyScalar(-0.8);
+
+        player.position.lerp(
+            car.position.clone().add(seatOffset).setY(1),
+            0.2
         );
     }
 
     // =====================
-    // ENTER / EXIT FIXED
+    // ENTER / EXIT (FIXED)
     // =====================
     if(keys["e"] && !eLast){
 
@@ -68,25 +82,30 @@ function animate(){
         else if(inCar){
             inCar = false;
 
-            player.position.x += Math.sin(car.rotation.y) * 2;
-            player.position.z += Math.cos(car.rotation.y) * 2;
+            let exitOffset = new THREE.Vector3(
+                Math.sin(car.rotation.y) * 2,
+                0,
+                Math.cos(car.rotation.y) * 2
+            );
+
+            player.position.add(exitOffset);
         }
     }
 
     eLast = keys["e"];
 
     // =====================
-    // CAMERA (FIXED GTA STYLE FOLLOW)
+    // CAMERA (GTA STYLE FOLLOW FIX)
     // =====================
     let target = inCar ? car.position : player.position;
 
-    let desired = new THREE.Vector3(
+    let offset = new THREE.Vector3(
         target.x,
         5,
         target.z + 8
     );
 
-    cam.lerp(desired, 0.1);
+    cam.lerp(offset, 0.1);
 
     camera.position.copy(cam);
     camera.lookAt(target);
