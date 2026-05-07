@@ -2,41 +2,40 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Echo Shift GTA Prototype</title>
+<title>Echo Shift</title>
 
 <style>
 body{
     margin:0;
     overflow:hidden;
 }
-canvas{
-    display:block;
-}
 </style>
 </head>
 
 <body>
 
+<!-- THREE.JS -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
 <script>
 
 // =====================
-// SCENE SETUP
+// SCENE
 // =====================
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x202030);
 
 const camera = new THREE.PerspectiveCamera(
-    75,
-    window.innerWidth/window.innerHeight,
-    0.1,
-    1000
+75,
+window.innerWidth/window.innerHeight,
+0.1,
+1000
 );
 
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
+
+renderer.setSize(window.innerWidth,window.innerHeight);
+
 document.body.appendChild(renderer.domElement);
 
 // =====================
@@ -44,31 +43,45 @@ document.body.appendChild(renderer.domElement);
 // =====================
 
 const light = new THREE.DirectionalLight(0xffffff,1);
+
 light.position.set(5,10,5);
+
 scene.add(light);
 
 // =====================
-// GROUND
+// FLOOR
 // =====================
 
-const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(100,100),
-    new THREE.MeshStandardMaterial({color:0x333333})
+const floor = new THREE.Mesh(
+
+new THREE.PlaneGeometry(100,100),
+
+new THREE.MeshStandardMaterial({
+color:0x444444
+})
+
 );
 
-ground.rotation.x = -Math.PI/2;
-scene.add(ground);
+floor.rotation.x = -Math.PI/2;
+
+scene.add(floor);
 
 // =====================
 // PLAYER
 // =====================
 
 const player = new THREE.Mesh(
-    new THREE.BoxGeometry(1,2,1),
-    new THREE.MeshStandardMaterial({color:0xffffff})
+
+new THREE.BoxGeometry(1,2,1),
+
+new THREE.MeshStandardMaterial({
+color:0xffffff
+})
+
 );
 
 player.position.y = 1;
+
 scene.add(player);
 
 // =====================
@@ -76,29 +89,35 @@ scene.add(player);
 // =====================
 
 const car = new THREE.Mesh(
-    new THREE.BoxGeometry(2,1,4),
-    new THREE.MeshStandardMaterial({color:0xff0000})
+
+new THREE.BoxGeometry(2,1,4),
+
+new THREE.MeshStandardMaterial({
+color:0xff0000
+})
+
 );
 
 car.position.set(5,0.5,0);
+
 scene.add(car);
 
 // =====================
 // INPUT
 // =====================
 
-const keys = {};
+let keys = {};
 
 document.addEventListener("keydown",(e)=>{
-    keys[e.key.toLowerCase()] = true;
+keys[e.key.toLowerCase()] = true;
 });
 
 document.addEventListener("keyup",(e)=>{
-    keys[e.key.toLowerCase()] = false;
+keys[e.key.toLowerCase()] = false;
 });
 
 // =====================
-// GAME VARIABLES
+// VARIABLES
 // =====================
 
 let inCar = false;
@@ -116,126 +135,98 @@ let cam = new THREE.Vector3();
 
 function animate(){
 
-    requestAnimationFrame(animate);
+requestAnimationFrame(animate);
 
-    let dt = Math.min(clock.getDelta(),0.033);
+let dt = Math.min(clock.getDelta(),0.033);
 
-    // =====================
-    // WALK MODE
-    // =====================
+// WALK
 
-    if(!inCar){
+if(!inCar){
 
-        let speed = 5 * dt;
+let speed = 5 * dt;
 
-        if(keys["w"]) player.position.z -= speed;
-        if(keys["s"]) player.position.z += speed;
-        if(keys["a"]) player.position.x -= speed;
-        if(keys["d"]) player.position.x += speed;
-    }
+if(keys["w"]) player.position.z -= speed;
+if(keys["s"]) player.position.z += speed;
+if(keys["a"]) player.position.x -= speed;
+if(keys["d"]) player.position.x += speed;
 
-    // =====================
-    // CAR MODE
-    // =====================
+}
 
-    if(inCar){
+// CAR
 
-        let accel = 10 * dt;
-        let turn = 2.5 * dt;
+if(inCar){
 
-        if(keys["w"]) carSpeed += accel;
-        if(keys["s"]) carSpeed -= accel;
+let accel = 10 * dt;
 
-        // friction
-        if(!keys["w"] && !keys["s"]){
-            carSpeed *= Math.pow(0.92,dt*60);
-        }
+if(keys["w"]) carSpeed += accel;
+if(keys["s"]) carSpeed -= accel;
 
-        // clamp
-        carSpeed = Math.max(-6,Math.min(12,carSpeed));
+carSpeed *= 0.98;
 
-        let steerFactor = Math.min(1,Math.abs(carSpeed)/5);
+let steer = 2 * dt;
 
-        if(keys["a"]) car.rotation.y += turn * steerFactor;
-        if(keys["d"]) car.rotation.y -= turn * steerFactor;
+if(keys["a"]) car.rotation.y += steer;
+if(keys["d"]) car.rotation.y -= steer;
 
-        let forward = new THREE.Vector3(
-            Math.sin(car.rotation.y),
-            0,
-            Math.cos(car.rotation.y)
-        );
+let forward = new THREE.Vector3(
+Math.sin(car.rotation.y),
+0,
+Math.cos(car.rotation.y)
+);
 
-        car.position.add(
-            forward.multiplyScalar(carSpeed * dt)
-        );
+car.position.add(
+forward.multiplyScalar(carSpeed * dt)
+);
 
-        // player follows seat
-        player.position.lerp(
-            car.position.clone().setY(1),
-            0.2
-        );
-    }
+player.position.copy(car.position);
 
-    // =====================
-    // ENTER / EXIT
-    // =====================
+}
 
-    if(keys["e"] && !eLast){
+// ENTER EXIT
 
-        if(!inCar){
+if(keys["e"] && !eLast){
 
-            if(player.position.distanceTo(car.position) < 3){
-                inCar = true;
-            }
+if(!inCar){
 
-        }else{
+if(player.position.distanceTo(car.position) < 3){
 
-            inCar = false;
+inCar = true;
 
-            player.position.x += 2;
-        }
-    }
+}
 
-    eLast = keys["e"];
+}else{
 
-    // =====================
-    // CAMERA
-    // =====================
+inCar = false;
 
-    let target = inCar ? car.position : player.position;
+player.position.x += 2;
 
-    let offset = new THREE.Vector3(
-        target.x,
-        6,
-        target.z + 8
-    );
+}
 
-    cam.lerp(offset,0.08);
+}
 
-    camera.position.copy(cam);
+eLast = keys["e"];
 
-    camera.lookAt(target);
+// CAMERA
 
-    renderer.render(scene,camera);
+let target = inCar ? car.position : player.position;
+
+let offset = new THREE.Vector3(
+target.x,
+6,
+target.z + 8
+);
+
+cam.lerp(offset,0.08);
+
+camera.position.copy(cam);
+
+camera.lookAt(target);
+
+renderer.render(scene,camera);
+
 }
 
 animate();
-
-// =====================
-// RESIZE
-// =====================
-
-window.addEventListener("resize",()=>{
-
-    camera.aspect = window.innerWidth/window.innerHeight;
-
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(
-        window.innerWidth,
-        window.innerHeight
-    );
-});
 
 </script>
 
