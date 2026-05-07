@@ -1,226 +1,242 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Echo Shift Prototype</title>
+<meta charset="UTF-8">
+<title>Echo Shift GTA Prototype</title>
 
 <style>
-    body {
-        margin: 0;
-        overflow: hidden;
-        background: #0d0d16;
-        font-family: Arial, sans-serif;
-        color: white;
-    }
-
-    #game {
-        position: relative;
-        width: 100vw;
-        height: 100vh;
-        overflow: hidden;
-    }
-
-    .room {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        transition: background 0.5s;
-    }
-
-    .past {
-        background: linear-gradient(#6a4cff, #2b1b55);
-    }
-
-    .present {
-        background: linear-gradient(#202040, #101020);
-    }
-
-    .future {
-        background: linear-gradient(#00d4ff, #003344);
-    }
-
-    .player {
-        position: absolute;
-        width: 50px;
-        height: 50px;
-        background: white;
-        border-radius: 10px;
-        left: 100px;
-        top: 100px;
-        transition: 0.05s;
-    }
-
-    .object {
-        position: absolute;
-        width: 100px;
-        height: 100px;
-        border-radius: 12px;
-    }
-
-    .past-object {
-        background: #ffcc00;
-    }
-
-    .present-object {
-        background: #00ff88;
-    }
-
-    .future-object {
-        background: #ff0066;
-    }
-
-    #ui {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        z-index: 100;
-    }
-
-    button {
-        padding: 10px 20px;
-        margin-right: 10px;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-
-    #message {
-        margin-top: 10px;
-        font-size: 18px;
-    }
+body{
+    margin:0;
+    overflow:hidden;
+}
+canvas{
+    display:block;
+}
 </style>
 </head>
 
 <body>
 
-<div id="game">
-    <div id="room" class="room present"></div>
-
-    <div id="player" class="player"></div>
-
-    <div id="timelineObject" class="object present-object"
-         style="left:500px; top:250px;"></div>
-
-    <div id="ui">
-        <button onclick="shiftTimeline('past')">Past</button>
-        <button onclick="shiftTimeline('present')">Present</button>
-        <button onclick="shiftTimeline('future')">Future</button>
-
-        <div id="message">
-            Timeline: Present
-        </div>
-    </div>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
 <script>
-    const room = document.getElementById("room");
-    const object = document.getElementById("timelineObject");
-    const message = document.getElementById("message");
-    const player = document.getElementById("player");
 
-    let timeline = "present";
+// =====================
+// SCENE SETUP
+// =====================
 
-    // PLAYER MOVEMENT
-    let x = 100;
-    let y = 100;
-    const speed = 8;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202030);
 
-    const keys = {};
+const camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth/window.innerHeight,
+    0.1,
+    1000
+);
 
-    document.addEventListener("keydown", (e) => {
-        keys[e.key] = true;
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-        // Interaction
-        if (e.key === "e") {
-            interact();
-        }
-    });
+// =====================
+// LIGHT
+// =====================
 
-    document.addEventListener("keyup", (e) => {
-        keys[e.key] = false;
-    });
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(5,10,5);
+scene.add(light);
 
-    function gameLoop() {
+// =====================
+// GROUND
+// =====================
 
-        if (keys["w"] || keys["ArrowUp"]) y -= speed;
-        if (keys["s"] || keys["ArrowDown"]) y += speed;
-        if (keys["a"] || keys["ArrowLeft"]) x -= speed;
-        if (keys["d"] || keys["ArrowRight"]) x += speed;
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(100,100),
+    new THREE.MeshStandardMaterial({color:0x333333})
+);
 
-        player.style.left = x + "px";
-        player.style.top = y + "px";
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
 
-        requestAnimationFrame(gameLoop);
+// =====================
+// PLAYER
+// =====================
+
+const player = new THREE.Mesh(
+    new THREE.BoxGeometry(1,2,1),
+    new THREE.MeshStandardMaterial({color:0xffffff})
+);
+
+player.position.y = 1;
+scene.add(player);
+
+// =====================
+// CAR
+// =====================
+
+const car = new THREE.Mesh(
+    new THREE.BoxGeometry(2,1,4),
+    new THREE.MeshStandardMaterial({color:0xff0000})
+);
+
+car.position.set(5,0.5,0);
+scene.add(car);
+
+// =====================
+// INPUT
+// =====================
+
+const keys = {};
+
+document.addEventListener("keydown",(e)=>{
+    keys[e.key.toLowerCase()] = true;
+});
+
+document.addEventListener("keyup",(e)=>{
+    keys[e.key.toLowerCase()] = false;
+});
+
+// =====================
+// GAME VARIABLES
+// =====================
+
+let inCar = false;
+let eLast = false;
+
+let clock = new THREE.Clock();
+
+let carSpeed = 0;
+
+let cam = new THREE.Vector3();
+
+// =====================
+// GAME LOOP
+// =====================
+
+function animate(){
+
+    requestAnimationFrame(animate);
+
+    let dt = Math.min(clock.getDelta(),0.033);
+
+    // =====================
+    // WALK MODE
+    // =====================
+
+    if(!inCar){
+
+        let speed = 5 * dt;
+
+        if(keys["w"]) player.position.z -= speed;
+        if(keys["s"]) player.position.z += speed;
+        if(keys["a"]) player.position.x -= speed;
+        if(keys["d"]) player.position.x += speed;
     }
 
-    gameLoop();
+    // =====================
+    // CAR MODE
+    // =====================
 
-    // TIMELINE SWITCHING
-    function shiftTimeline(newTimeline) {
-        timeline = newTimeline;
+    if(inCar){
 
-        room.className = "room " + timeline;
+        let accel = 10 * dt;
+        let turn = 2.5 * dt;
 
-        object.className = "object";
+        if(keys["w"]) carSpeed += accel;
+        if(keys["s"]) carSpeed -= accel;
 
-        if (timeline === "past") {
-            object.classList.add("past-object");
-            object.style.left = "300px";
-            object.style.top = "200px";
+        // friction
+        if(!keys["w"] && !keys["s"]){
+            carSpeed *= Math.pow(0.92,dt*60);
         }
 
-        if (timeline === "present") {
-            object.classList.add("present-object");
-            object.style.left = "500px";
-            object.style.top = "250px";
-        }
+        // clamp
+        carSpeed = Math.max(-6,Math.min(12,carSpeed));
 
-        if (timeline === "future") {
-            object.classList.add("future-object");
-            object.style.left = "700px";
-            object.style.top = "150px";
-        }
+        let steerFactor = Math.min(1,Math.abs(carSpeed)/5);
 
-        message.innerHTML =
-            "Timeline: " +
-            timeline.charAt(0).toUpperCase() +
-            timeline.slice(1);
-    }
+        if(keys["a"]) car.rotation.y += turn * steerFactor;
+        if(keys["d"]) car.rotation.y -= turn * steerFactor;
 
-    // INTERACTION SYSTEM
-    function interact() {
-
-        const playerRect = player.getBoundingClientRect();
-        const objectRect = object.getBoundingClientRect();
-
-        const distance = Math.hypot(
-            playerRect.x - objectRect.x,
-            playerRect.y - objectRect.y
+        let forward = new THREE.Vector3(
+            Math.sin(car.rotation.y),
+            0,
+            Math.cos(car.rotation.y)
         );
 
-        if (distance < 120) {
+        car.position.add(
+            forward.multiplyScalar(carSpeed * dt)
+        );
 
-            if (timeline === "past") {
-                message.innerHTML =
-                    "You found an OLD CLUE from the past.";
+        // player follows seat
+        player.position.lerp(
+            car.position.clone().setY(1),
+            0.2
+        );
+    }
+
+    // =====================
+    // ENTER / EXIT
+    // =====================
+
+    if(keys["e"] && !eLast){
+
+        if(!inCar){
+
+            if(player.position.distanceTo(car.position) < 3){
+                inCar = true;
             }
 
-            if (timeline === "present") {
-                message.innerHTML =
-                    "The clue is partially destroyed.";
-            }
+        }else{
 
-            if (timeline === "future") {
-                message.innerHTML =
-                    "The clue evolved into encrypted data.";
-            }
+            inCar = false;
 
-        } else {
-            message.innerHTML = "Nothing nearby.";
+            player.position.x += 2;
         }
     }
+
+    eLast = keys["e"];
+
+    // =====================
+    // CAMERA
+    // =====================
+
+    let target = inCar ? car.position : player.position;
+
+    let offset = new THREE.Vector3(
+        target.x,
+        6,
+        target.z + 8
+    );
+
+    cam.lerp(offset,0.08);
+
+    camera.position.copy(cam);
+
+    camera.lookAt(target);
+
+    renderer.render(scene,camera);
+}
+
+animate();
+
+// =====================
+// RESIZE
+// =====================
+
+window.addEventListener("resize",()=>{
+
+    camera.aspect = window.innerWidth/window.innerHeight;
+
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
+});
+
 </script>
 
 </body>
