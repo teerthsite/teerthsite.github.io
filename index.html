@@ -1,228 +1,73 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>GTA Style Sandbox v2</title>
-<style>
-body { margin:0; overflow:hidden; background:black; }
-canvas { display:block; }
-#ui{
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:white;
-    font-family:Arial;
-}
-</style>
+  <title>Simple Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      display: flex;
+      justify-content: center;
+      margin-top: 40px;
+    }
+    .chat-box {
+      width: 400px;
+      background: white;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #messages {
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    input {
+      width: 75%;
+      padding: 8px;
+    }
+    button {
+      padding: 8px;
+    }
+    .msg {
+      margin: 5px 0;
+    }
+    .user {
+      color: blue;
+    }
+    .bot {
+      color: green;
+    }
+  </style>
 </head>
 <body>
-<div id="ui"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<div class="chat-box">
+  <div id="messages"></div>
+  <input id="input" placeholder="Type a message..." />
+  <button onclick="sendMessage()">Send</button>
+</div>
 
 <script>
+function sendMessage() {
+  const input = document.getElementById("input");
+  const messages = document.getElementById("messages");
 
-// 🌍 WORLD
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+  const userMsg = document.createElement("div");
+  userMsg.className = "msg user";
+  userMsg.innerText = "You: " + input.value;
+  messages.appendChild(userMsg);
 
-const camera = new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
+  const botMsg = document.createElement("div");
+  botMsg.className = "msg bot";
+  botMsg.innerText = "Bot: I got your message!";
+  messages.appendChild(botMsg);
 
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth,window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// 💡 LIGHT
-scene.add(new THREE.AmbientLight(0x404040));
-const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(10,20,10);
-scene.add(light);
-
-// 🌍 GROUND
-const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(500,500),
-    new THREE.MeshStandardMaterial({color:0x2d8f2d})
-);
-ground.rotation.x = -Math.PI/2;
-scene.add(ground);
-
-// 🧍 PLAYER
-const player = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.5,1,4,8),
-    new THREE.MeshStandardMaterial({color:0x00ffff})
-);
-player.position.y = 1;
-scene.add(player);
-
-// 🚗 CAR
-const car = new THREE.Mesh(
-    new THREE.BoxGeometry(2,1,4),
-    new THREE.MeshStandardMaterial({color:0x0066ff})
-);
-car.position.set(5,0.5,0);
-scene.add(car);
-
-let inCar = false;
-let velocity = new THREE.Vector3();
-
-// 👮 POLICE
-const police = new THREE.Mesh(
-    new THREE.BoxGeometry(2,1,4),
-    new THREE.MeshStandardMaterial({color:0xff0000})
-);
-police.position.set(-10,0.5,0);
-scene.add(police);
-
-// 🎯 MISSION
-const mission = { x: 80, z: 80, active:true };
-
-// ⭐ WANTED
-let wanted = 0;
-let shake = 0;
-
-// 🎮 INPUT
-let keys = {};
-document.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
-document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
-
-// 🧍 PLAYER MOVE
-function updatePlayer(){
-    if(inCar) return;
-
-    let speed = 0.12;
-
-    if(keys["w"]) player.position.z -= speed;
-    if(keys["s"]) player.position.z += speed;
-    if(keys["a"]) player.position.x -= speed;
-    if(keys["d"]) player.position.x += speed;
+  input.value = "";
+  messages.scrollTop = messages.scrollHeight;
 }
-
-// 🚗 CAR PHYSICS (GTA FEEL)
-function updateCar(){
-
-    if(!inCar) return;
-
-    let forward = new THREE.Vector3(
-        Math.sin(car.rotation.y),
-        0,
-        Math.cos(car.rotation.y)
-    );
-
-    if(keys["w"]) velocity.add(forward.multiplyScalar(0.08));
-
-    let speed = velocity.length();
-
-    let turn = 0.02 + speed * 0.002;
-
-    if(keys["a"]) car.rotation.y += turn;
-    if(keys["d"]) car.rotation.y -= turn;
-
-    let grip = keys["shift"] ? 0.98 : 0.92;
-
-    velocity.multiplyScalar(grip);
-
-    car.position.add(velocity);
-
-    player.position.copy(car.position);
-
-    if(speed > 5) shake = speed * 0.4;
-}
-
-// 👮 POLICE AI (CHASE)
-function updatePolice(){
-
-    let target = inCar ? car.position : player.position;
-
-    let dir = target.clone().sub(police.position);
-    dir.y = 0;
-
-    police.position.add(dir.normalize().multiplyScalar(0.05 * Math.max(1,wanted)));
-
-    let dist = police.position.distanceTo(target);
-
-    if(dist < 20) shake = 6;
-}
-
-// ⭐ WANTED SYSTEM
-function updateWanted(){
-
-    if(keys[" "]) wanted = Math.min(5, wanted + 0.05);
-
-    if(wanted > 0) wanted *= 0.999;
-}
-
-// 🎯 MISSION
-function updateMission(){
-
-    let target = inCar ? car.position : player.position;
-
-    let dx = target.x - mission.x;
-    let dz = target.z - mission.z;
-
-    let d = Math.sqrt(dx*dx + dz*dz);
-
-    if(d < 15 && mission.active){
-        mission.active = false;
-        wanted = 0;
-    }
-}
-
-// 🎥 CAMERA (GTA STYLE)
-function updateCamera(){
-
-    let target = inCar ? car.position : player.position;
-
-    camera.position.x += (target.x - camera.position.x) * 0.08;
-    camera.position.y = target.y + 6;
-    camera.position.z += (target.z + 10 - camera.position.z) * 0.08;
-
-    camera.lookAt(target);
-
-    if(shake > 0){
-        camera.position.x += (Math.random()-0.5)*shake;
-        camera.position.z += (Math.random()-0.5)*shake;
-        shake *= 0.9;
-    }
-}
-
-// 🗺️ MINIMAP
-function drawUI(){
-
-    let ui = document.getElementById("ui");
-
-    ui.innerHTML =
-    "Wanted: " + Math.floor(wanted) + " ⭐<br>" +
-    "E = Enter/Exit Car | SHIFT = Drift | SPACE = Wanted";
-
-    // simple radar dot system (text-based for now)
-}
-
-// 🚗 ENTER / EXIT CAR
-document.addEventListener("keydown",e=>{
-    if(e.key==="e"){
-        inCar = !inCar;
-        player.position.copy(car.position);
-    }
-});
-
-// 🔁 LOOP
-function animate(){
-
-    requestAnimationFrame(animate);
-
-    updatePlayer();
-    updateCar();
-    updatePolice();
-    updateWanted();
-    updateMission();
-    updateCamera();
-
-    renderer.render(scene,camera);
-    drawUI();
-}
-
-animate();
-
 </script>
 
 </body>
